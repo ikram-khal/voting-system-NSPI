@@ -5,6 +5,9 @@ handlers_voter.py — Обработчики для участников (гол
   - /start → регистрация по PIN
   - /vote  → проверить доступные голосования
   - inline-кнопки → голосование За / Против / Воздержался
+
+Админ/секретарь тоже использует /start для регистрации как голосующий.
+Панель управления — через кнопку Меню (Mini Web App).
 """
 
 import logging
@@ -13,6 +16,7 @@ from telegram.ext import (
     ContextTypes, ConversationHandler, CommandHandler,
     MessageHandler, CallbackQueryHandler, filters
 )
+from config import ADMIN_ID
 import database as db
 
 logger = logging.getLogger(__name__)
@@ -24,16 +28,43 @@ WAITING_PIN = 1
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /start — приветствие и проверка регистрации."""
     user_id = update.effective_user.id
+    is_admin = (user_id == ADMIN_ID)
     member = db.get_member_by_telegram_id(user_id)
 
     if member:
-        await update.message.reply_text(
+        # Уже зарегистрирован
+        text = (
             f"👋 Добро пожаловать, *{member['name']}*!\n\n"
             f"Вы зарегистрированы в системе голосования Илмий Кенгаш.\n\n"
             f"📝 /vote — проверить доступные голосования\n"
-            f"ℹ️ /status — ваш статус",
+            f"ℹ️ /status — ваш статус"
+        )
+        if is_admin:
+            text += (
+                f"\n\n🔧 *Вы — секретарь (админ)*\n"
+                f"📋 Нажмите кнопку *Меню* (слева внизу) для управления\n"
+                f"📎 Отправьте .xlsx файл для загрузки участников\n"
+                f"📥 /sample — скачать шаблон файла"
+            )
+        await update.message.reply_text(text, parse_mode="Markdown")
+        return ConversationHandler.END
+
+    # Не зарегистрирован
+    if is_admin:
+        # Админ тоже должен зарегистрироваться через PIN, чтобы голосовать
+        await update.message.reply_text(
+            "🏛 *Илмий Кенгаш — Система голосования*\n\n"
+            "👋 Вы определены как *секретарь (админ)*.\n\n"
+            "📋 Нажмите кнопку *Меню* (слева внизу) — откроется панель управления.\n"
+            "📎 Или отправьте .xlsx файл со списком участников.\n"
+            "📥 /sample — скачать шаблон файла.\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Чтобы *самому голосовать* на заседаниях, "
+            "вам тоже нужно зарегистрироваться.\n"
+            "Введите ваш PIN-код:",
             parse_mode="Markdown"
         )
+        return WAITING_PIN
     else:
         await update.message.reply_text(
             "🏛 *Илмий Кенгаш — Система голосования*\n\n"
@@ -43,8 +74,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
         return WAITING_PIN
-
-    return ConversationHandler.END
 
 
 async def receive_pin(update: Update, context: ContextTypes.DEFAULT_TYPE):

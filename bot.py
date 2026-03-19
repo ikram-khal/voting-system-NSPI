@@ -82,6 +82,20 @@ async def run_production():
     logger.info(f"✅ Webhook установлен: {webhook_url}")
     logger.info(f"🌐 WebApp доступна: {WEBAPP_URL}")
 
+    # Установка кнопки Меню (Mini Web App) для админа
+    from telegram import MenuButtonWebApp, WebAppInfo
+    try:
+        await application.bot.set_chat_menu_button(
+            chat_id=ADMIN_ID,
+            menu_button=MenuButtonWebApp(
+                text="📋 Панель",
+                web_app=WebAppInfo(url=WEBAPP_URL)
+            )
+        )
+        logger.info(f"✅ Кнопка Меню установлена для админа (ID: {ADMIN_ID})")
+    except Exception as e:
+        logger.warning(f"⚠️ Не удалось установить кнопку Меню: {e}")
+
     # aiohttp маршруты
     aio_app = web.Application()
 
