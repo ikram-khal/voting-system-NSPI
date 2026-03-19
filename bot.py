@@ -59,6 +59,27 @@ async def run_production():
     await application.bot.set_webhook(url=webhook_url)
     logger.info(f"✅ Webhook: {webhook_url}")
 
+    # Установить команды для кнопки Меню
+    from telegram import BotCommand, BotCommandScopeChat
+    try:
+        # Для админа — обе команды
+        await application.bot.set_my_commands(
+            commands=[
+                BotCommand("admin", "🔧 Управление"),
+                BotCommand("vote", "🗳 Голосование"),
+            ],
+            scope=BotCommandScopeChat(chat_id=ADMIN_ID)
+        )
+        # Для остальных — только голосование
+        await application.bot.set_my_commands(
+            commands=[
+                BotCommand("vote", "🗳 Голосование"),
+            ]
+        )
+        logger.info("✅ Команды меню установлены")
+    except Exception as e:
+        logger.warning(f"⚠️ Команды: {e}")
+
     aio_app = web.Application()
 
     async def handle_webhook(request):
