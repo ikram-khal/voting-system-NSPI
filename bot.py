@@ -1,18 +1,8 @@
 """
-bot.py — Главный файл бота Илмий Кенгаш.
+bot.py — Илмий Кенгаш: бот для тайного голосования.
 
-Запуск:
-  python bot.py
-
-Режимы:
-  - Локально: polling (автоматически, если нет KOYEB_PUBLIC_DOMAIN)
-  - Koyeb: webhook + встроенный веб-сервер для Mini Web App
-
-На Koyeb нужны только 2 переменные окружения:
-  BOT_TOKEN  — токен от @BotFather
-  ADMIN_ID   — ваш Telegram ID
-
-Всё остальное определяется автоматически.
+Koyeb: нужны только BOT_TOKEN и ADMIN_ID.
+Локально: polling режим (python bot.py).
 """
 
 import os
@@ -25,12 +15,9 @@ from telegram.ext import (
     ApplicationBuilder, CommandHandler,
     CallbackQueryHandler, MessageHandler, filters
 )
-from config import BOT_TOKEN, WEBHOOK_URL, WEBAPP_URL, PORT, IS_PRODUCTION
-from handlers_voter import (
-    get_registration_handler, vote_command,
-    status_command, handle_vote_callback
-)
-from handlers_admin import admin_panel, handle_webapp_data, handle_document, send_sample
+from config import BOT_TOKEN, BASE_URL, WEBAPP_URL, PORT, IS_PRODUCTION, ADMIN_ID
+from handlers_voter import cmd_start, cmd_vote, cmd_status, handle_vote_callback, handle_text
+from handlers_admin import cmd_admin, cmd_sample, handle_document, handle_webapp_data
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -42,49 +29,46 @@ WEBAPP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "webapp")
 
 
 def build_app():
-    """Создать и настроить Telegram Application."""
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
-
-    # Регистрация (ConversationHandler: /start → PIN)
-    application.add_handler(get_registration_handler())
+    """Собрать Telegram Application с хэндлерами."""
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     # Команды
-    application.add_handler(CommandHandler("admin", admin_panel))
-    application.add_handler(CommandHandler("vote", vote_command))
-    application.add_handler(CommandHandler("status", status_command))
-    application.add_handler(CommandHandler("sample", send_sample))
+    app.add_handler(CommandHandler("start", cmd_start))
+    app.add_handler(CommandHandler("admin", cmd_admin))
+    app.add_handler(CommandHandler("vote", cmd_vote))
+    app.add_handler(CommandHandler("status", cmd_status))
+    app.add_handler(CommandHandler("sample", cmd_sample))
 
-    # Inline-кнопки голосования
-    application.add_handler(CallbackQueryHandler(handle_vote_callback, pattern=r"^vote:"))
+    # Кнопки голосования
+    app.add_handler(CallbackQueryHandler(handle_vote_callback, pattern=r"^v:"))
 
-    # Загрузка Excel-файла с участниками
-    application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+    # Excel-файл от админа
+    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 
-    # Данные из Mini Web App
-    application.add_handler(MessageHandler(
-        filters.StatusUpdate.WEB_APP_DATA, handle_webapp_data
-    ))
+    # Данные из Web App
+    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_webapp_data))
 
-    return application
+    # Текстовые сообщения (ввод PIN)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+
+    return app
 
 
 async def run_production():
-    """Продакшн: aiohttp-сервер с webhook + webapp + health."""
+    """Koyeb: webhook + веб-сервер для Mini Web App."""
     application = build_app()
 
-    # Инициализация бота
     await application.initialize()
     await application.start()
 
-    # Установка webhook
-    webhook_url = f"{WEBHOOK_URL}/webhook"
+    # Webhook
+    webhook_url = f"{BASE_URL}/webhook"
     await application.bot.set_webhook(url=webhook_url)
-    logger.info(f"✅ Webhook установлен: {webhook_url}")
-    logger.info(f"🌐 WebApp доступна: {WEBAPP_URL}")
+    logger.info(f"✅ Webhook: {webhook_url}")
 
-    # Установка кнопки Меню (Mini Web App) для админа
-    from telegram import MenuButtonWebApp, WebAppInfo
+    # Кнопка Меню для админа
     try:
+        from telegram import MenuButtonWebApp, WebAppInfo
         await application.bot.set_chat_menu_button(
             chat_id=ADMIN_ID,
             menu_button=MenuButtonWebApp(
@@ -92,43 +76,40 @@ async def run_production():
                 web_app=WebAppInfo(url=WEBAPP_URL)
             )
         )
-        logger.info(f"✅ Кнопка Меню установлена для админа (ID: {ADMIN_ID})")
+        logger.info(f"✅ Кнопка Меню для админа (ID: {ADMIN_ID})")
     except Exception as e:
-        logger.warning(f"⚠️ Не удалось установить кнопку Меню: {e}")
+        logger.warning(f"⚠️ Кнопка Меню: {e}")
 
-    # aiohttp маршруты
+    # aiohttp сервер
     aio_app = web.Application()
 
-    # POST /webhook — принимает обновления от Telegram
     async def handle_webhook(request):
-        data = await request.json()
-        update = Update.de_json(data, application.bot)
-        await application.process_update(update)
+        try:
+            data = await request.json()
+            update = Update.de_json(data, application.bot)
+            await application.process_update(update)
+        except Exception as e:
+            logger.error(f"Webhook error: {e}")
         return web.Response(text="ok")
 
-    # GET /webapp — отдаёт Mini Web App
     async def handle_webapp(request):
         filepath = os.path.join(WEBAPP_DIR, "index.html")
         if os.path.exists(filepath):
             return web.FileResponse(filepath)
-        return web.Response(text="Webapp not found", status=404)
+        return web.Response(text="Not found", status=404)
 
-    # GET / — health check для Koyeb
     async def handle_health(request):
         return web.Response(text="OK")
 
-    # GET /api/data — API для Web App (получить данные)
     async def handle_api_data(request):
         import database as db
-        members = db.get_members()
-        safe_members = [{
+        members = [{
             "name": m["name"],
             "pin": m["pin"],
             "registered": m["telegram_id"] is not None
-        } for m in members]
-
+        } for m in db.get_members()]
         return web.json_response({
-            "members": safe_members,
+            "members": members,
             "meetings": db.get_meetings()
         })
 
@@ -141,9 +122,9 @@ async def run_production():
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", PORT)
     await site.start()
-    logger.info(f"🚀 Сервер запущен на порту {PORT}")
+    logger.info(f"🚀 Сервер: порт {PORT}")
+    logger.info(f"🌐 WebApp: {WEBAPP_URL}")
 
-    # Держим сервер работающим
     try:
         await asyncio.Event().wait()
     finally:
@@ -153,12 +134,10 @@ async def run_production():
 
 
 def run_local():
-    """Локальный режим: polling."""
-    application = build_app()
-    logger.info("🔧 Локальный режим (polling)")
-    logger.info("   Mini Web App недоступна (нужен HTTPS на Koyeb)")
-    logger.info("   Бот работает — можно тестировать команды")
-    application.run_polling(drop_pending_updates=True)
+    """Локально: polling."""
+    app = build_app()
+    logger.info("🔧 Polling режим (локальный)")
+    app.run_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":

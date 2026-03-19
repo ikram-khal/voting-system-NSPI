@@ -1,9 +1,6 @@
 """
-database.py — Хранение данных в JSON-файлах.
-
-Структура:
-  data/members.json    — список участников [{name, pin, telegram_id}]
-  data/sessions.json   — заседания и сеансы голосования
+database.py — JSON-хранилище данных.
+Файлы: data/members.json, data/meetings.json
 """
 
 import json
@@ -34,38 +31,28 @@ def _write(filename, data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-# ──────────────────────────────────────────────
-#  УЧАСТНИКИ (members)
-# ──────────────────────────────────────────────
+# ── УЧАСТНИКИ ──
 
 def get_members():
-    """Получить всех участников."""
     return _read("members.json") or []
 
 
 def save_members(members):
-    """Сохранить список участников."""
     with _lock:
         _write("members.json", members)
 
 
 def add_member(name, pin):
-    """Добавить участника. Возвращает True если OK, False если PIN занят."""
     with _lock:
         members = get_members()
         if any(m["pin"] == pin for m in members):
             return False
-        members.append({
-            "name": name,
-            "pin": pin,
-            "telegram_id": None
-        })
+        members.append({"name": name, "pin": pin, "telegram_id": None})
         _write("members.json", members)
         return True
 
 
 def remove_member(pin):
-    """Удалить участника по PIN."""
     with _lock:
         members = get_members()
         members = [m for m in members if m["pin"] != pin]
@@ -73,8 +60,6 @@ def remove_member(pin):
 
 
 def bind_telegram_id(pin, telegram_id):
-    """Привязать Telegram ID к участнику по PIN.
-    Возвращает имя участника или None если PIN не найден."""
     with _lock:
         members = get_members()
         for m in members:
@@ -86,69 +71,55 @@ def bind_telegram_id(pin, telegram_id):
 
 
 def get_member_by_telegram_id(telegram_id):
-    """Найти участника по Telegram ID."""
-    members = get_members()
-    for m in members:
+    for m in get_members():
         if m["telegram_id"] == telegram_id:
             return m
     return None
 
 
 def get_member_by_pin(pin):
-    """Найти участника по PIN."""
-    members = get_members()
-    for m in members:
+    for m in get_members():
         if m["pin"] == pin:
             return m
     return None
 
 
-# ──────────────────────────────────────────────
-#  ЗАСЕДАНИЯ (meetings) и СЕАНСЫ (sessions)
-# ──────────────────────────────────────────────
+# ── ЗАСЕДАНИЯ ──
 
 def get_meetings():
-    """Получить все заседания."""
     return _read("meetings.json") or []
 
 
 def save_meetings(meetings):
-    """Сохранить все заседания."""
     with _lock:
         _write("meetings.json", meetings)
 
 
 def create_meeting(date_str, protocol_number):
-    """Создать новое заседание.
-    Возвращает ID заседания."""
     with _lock:
         meetings = get_meetings()
         meeting_id = f"m_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        meeting = {
+        meetings.append({
             "id": meeting_id,
             "date": date_str,
             "protocol_number": protocol_number,
             "created_at": datetime.now().isoformat(),
-            "attendees": [],       # PINы присутствующих
-            "sessions": [],        # сеансы голосования
-            "status": "draft"      # draft / active / closed
-        }
-        meetings.append(meeting)
+            "attendees": [],
+            "sessions": [],
+            "status": "draft"
+        })
         _write("meetings.json", meetings)
         return meeting_id
 
 
 def get_meeting(meeting_id):
-    """Получить заседание по ID."""
-    meetings = get_meetings()
-    for mt in meetings:
+    for mt in get_meetings():
         if mt["id"] == meeting_id:
             return mt
     return None
 
 
 def update_meeting(meeting_id, updates):
-    """Обновить поля заседания."""
     with _lock:
         meetings = get_meetings()
         for mt in meetings:
@@ -159,58 +130,46 @@ def update_meeting(meeting_id, updates):
 
 
 def set_attendees(meeting_id, pin_list):
-    """Установить список присутствующих (по PIN)."""
     update_meeting(meeting_id, {"attendees": pin_list})
 
 
 def add_session(meeting_id, title):
-    """Добавить сеанс голосования в заседание.
-    Возвращает ID сеанса."""
     with _lock:
         meetings = get_meetings()
         for mt in meetings:
             if mt["id"] == meeting_id:
-                session_id = f"s_{len(mt['sessions'])+1}"
-                session = {
+                session_id = f"s_{len(mt['sessions'])+1}_{int(datetime.now().timestamp())}"
+                mt["sessions"].append({
                     "id": session_id,
                     "title": title,
                     "questions": [],
-                    "status": "draft"  # draft / voting / closed
-                }
-                mt["sessions"].append(session)
+                    "status": "draft"
+                })
                 _write("meetings.json", meetings)
                 return session_id
     return None
 
 
 def add_question(meeting_id, session_id, question_text):
-    """Добавить вопрос в сеанс.
-    Возвращает ID вопроса."""
     with _lock:
         meetings = get_meetings()
         for mt in meetings:
             if mt["id"] == meeting_id:
                 for sess in mt["sessions"]:
                     if sess["id"] == session_id:
-                        q_id = f"q_{len(sess['questions'])+1}"
-                        question = {
+                        q_id = f"q_{len(sess['questions'])+1}_{int(datetime.now().timestamp())}"
+                        sess["questions"].append({
                             "id": q_id,
                             "text": question_text,
-                            "votes": {
-                                "for": 0,
-                                "against": 0,
-                                "abstain": 0
-                            },
-                            "voted_pins": []  # кто уже голосовал (для контроля, не для привязки)
-                        }
-                        sess["questions"].append(question)
+                            "votes": {"for": 0, "against": 0, "abstain": 0},
+                            "voted_pins": []
+                        })
                         _write("meetings.json", meetings)
                         return q_id
     return None
 
 
 def start_session_voting(meeting_id, session_id):
-    """Запустить голосование по сеансу."""
     with _lock:
         meetings = get_meetings()
         for mt in meetings:
@@ -218,13 +177,13 @@ def start_session_voting(meeting_id, session_id):
                 for sess in mt["sessions"]:
                     if sess["id"] == session_id:
                         sess["status"] = "voting"
+                        mt["status"] = "active"
                         _write("meetings.json", meetings)
                         return True
     return False
 
 
 def close_session_voting(meeting_id, session_id):
-    """Закрыть голосование по сеансу."""
     with _lock:
         meetings = get_meetings()
         for mt in meetings:
@@ -238,10 +197,7 @@ def close_session_voting(meeting_id, session_id):
 
 
 def cast_vote(meeting_id, session_id, question_id, pin, vote):
-    """Записать голос. vote = 'for' | 'against' | 'abstain'.
-    Анонимность: pin записывается в voted_pins только для контроля,
-    голос (for/against/abstain) не привязан к pin.
-    Возвращает: 'ok', 'already_voted', 'not_attendee', 'not_found', 'session_not_active'."""
+    """Записать анонимный голос. Возвращает статус."""
     with _lock:
         meetings = get_meetings()
         for mt in meetings:
@@ -264,19 +220,14 @@ def cast_vote(meeting_id, session_id, question_id, pin, vote):
 
 
 def get_active_voting(pin):
-    """Найти активное голосование для участника.
-    Возвращает список {meeting_id, session_id, session_title, questions} или []."""
-    meetings = get_meetings()
+    """Найти неотвеченные вопросы для участника."""
     result = []
-    for mt in meetings:
+    for mt in get_meetings():
         if pin not in mt.get("attendees", []):
             continue
         for sess in mt["sessions"]:
             if sess["status"] == "voting":
-                unanswered = []
-                for q in sess["questions"]:
-                    if pin not in q["voted_pins"]:
-                        unanswered.append(q)
+                unanswered = [q for q in sess["questions"] if pin not in q["voted_pins"]]
                 if unanswered:
                     result.append({
                         "meeting_id": mt["id"],
@@ -284,21 +235,19 @@ def get_active_voting(pin):
                         "protocol_number": mt["protocol_number"],
                         "session_id": sess["id"],
                         "session_title": sess["title"],
-                        "questions": unanswered
+                        "questions": unanswered,
+                        "total_questions": len(sess["questions"])
                     })
     return result
 
 
 def delete_meeting(meeting_id):
-    """Удалить заседание."""
     with _lock:
-        meetings = get_meetings()
-        meetings = [m for m in meetings if m["id"] != meeting_id]
+        meetings = [m for m in get_meetings() if m["id"] != meeting_id]
         _write("meetings.json", meetings)
 
 
 def delete_session(meeting_id, session_id):
-    """Удалить сеанс из заседания."""
     with _lock:
         meetings = get_meetings()
         for mt in meetings:
@@ -310,7 +259,6 @@ def delete_session(meeting_id, session_id):
 
 
 def delete_question(meeting_id, session_id, question_id):
-    """Удалить вопрос из сеанса."""
     with _lock:
         meetings = get_meetings()
         for mt in meetings:

@@ -1,132 +1,126 @@
 """
-handlers_voter.py — Обработчики для участников (голосующих).
+handlers_voter.py — Обработчики для участников.
 
-Участники взаимодействуют с ботом через:
-  - /start → регистрация по PIN
-  - /vote  → проверить доступные голосования
-  - inline-кнопки → голосование За / Против / Воздержался
-
-Админ/секретарь тоже использует /start для регистрации как голосующий.
-Панель управления — через кнопку Меню (Mini Web App).
+БЕЗ ConversationHandler — используем простой словарь состояний.
+Это надёжнее и не блокирует бота.
 """
 
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    ContextTypes, ConversationHandler, CommandHandler,
-    MessageHandler, CallbackQueryHandler, filters
-)
+from telegram.ext import ContextTypes
 from config import ADMIN_ID
 import database as db
 
 logger = logging.getLogger(__name__)
 
-# Состояния для регистрации
-WAITING_PIN = 1
+# Простое хранение состояний: {user_id: "awaiting_pin"}
+user_states = {}
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /start — приветствие и проверка регистрации."""
+async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /start."""
     user_id = update.effective_user.id
     is_admin = (user_id == ADMIN_ID)
     member = db.get_member_by_telegram_id(user_id)
 
     if member:
-        # Уже зарегистрирован
         text = (
             f"👋 Добро пожаловать, *{member['name']}*!\n\n"
-            f"Вы зарегистрированы в системе голосования Илмий Кенгаш.\n\n"
             f"📝 /vote — проверить доступные голосования\n"
             f"ℹ️ /status — ваш статус"
         )
         if is_admin:
             text += (
                 f"\n\n🔧 *Вы — секретарь (админ)*\n"
-                f"📋 Нажмите кнопку *Меню* (слева внизу) для управления\n"
-                f"📎 Отправьте .xlsx файл для загрузки участников\n"
-                f"📥 /sample — скачать шаблон файла"
+                f"📋 /admin — открыть панель управления\n"
+                f"📎 Отправьте .xlsx для загрузки участников\n"
+                f"📥 /sample — скачать шаблон"
             )
         await update.message.reply_text(text, parse_mode="Markdown")
-        return ConversationHandler.END
+        # Сбросить состояние
+        user_states.pop(user_id, None)
+        return
 
     # Не зарегистрирован
     if is_admin:
-        # Админ тоже должен зарегистрироваться через PIN, чтобы голосовать
         await update.message.reply_text(
             "🏛 *Илмий Кенгаш — Система голосования*\n\n"
-            "👋 Вы определены как *секретарь (админ)*.\n\n"
-            "📋 Нажмите кнопку *Меню* (слева внизу) — откроется панель управления.\n"
-            "📎 Или отправьте .xlsx файл со списком участников.\n"
-            "📥 /sample — скачать шаблон файла.\n\n"
+            "👋 Вы — *секретарь (админ)*.\n\n"
+            "📋 /admin — открыть панель управления\n"
+            "📎 Отправьте .xlsx файл со списком участников\n"
+            "📥 /sample — скачать шаблон\n\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
-            "Чтобы *самому голосовать* на заседаниях, "
-            "вам тоже нужно зарегистрироваться.\n"
+            "Чтобы *самому голосовать*, зарегистрируйтесь.\n"
             "Введите ваш PIN-код:",
             parse_mode="Markdown"
         )
-        return WAITING_PIN
     else:
         await update.message.reply_text(
             "🏛 *Илмий Кенгаш — Система голосования*\n\n"
-            "Для регистрации введите ваш уникальный PIN-код, "
-            "который вам выдал секретарь учёного совета.\n\n"
+            "Для регистрации введите ваш PIN-код, "
+            "который вам выдал секретарь.\n\n"
             "Введите PIN:",
             parse_mode="Markdown"
         )
-        return WAITING_PIN
+
+    user_states[user_id] = "awaiting_pin"
 
 
-async def receive_pin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Получение PIN для регистрации."""
-    pin = update.message.text.strip()
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка текстовых сообщений (для ввода PIN)."""
     user_id = update.effective_user.id
 
-    # Проверить, не привязан ли уже этот PIN к другому аккаунту
+    if user_states.get(user_id) != "awaiting_pin":
+        # Нет ожидания — игнорируем или подсказываем
+        await update.message.reply_text(
+            "Используйте команды:\n"
+            "📝 /vote — голосовать\n"
+            "ℹ️ /status — статус\n"
+            "/start — начало"
+        )
+        return
+
+    pin = update.message.text.strip()
+
+    # Убрать состояние
+    user_states.pop(user_id, None)
+
     existing = db.get_member_by_pin(pin)
     if not existing:
         await update.message.reply_text(
-            "❌ PIN не найден. Проверьте правильность и попробуйте снова.\n"
-            "Введите PIN:"
+            "❌ PIN не найден. Проверьте и попробуйте /start заново."
         )
-        return WAITING_PIN
+        return
 
     if existing["telegram_id"] is not None and existing["telegram_id"] != user_id:
         await update.message.reply_text(
             "❌ Этот PIN уже привязан к другому аккаунту.\n"
-            "Обратитесь к секретарю учёного совета."
+            "Обратитесь к секретарю."
         )
-        return ConversationHandler.END
+        return
 
     name = db.bind_telegram_id(pin, user_id)
     if name:
-        await update.message.reply_text(
+        text = (
             f"✅ Регистрация успешна!\n\n"
-            f"👤 {name}\n\n"
-            f"Теперь вы будете получать уведомления о голосованиях.\n"
-            f"📝 /vote — проверить доступные голосования",
-            parse_mode="Markdown"
+            f"👤 *{name}*\n\n"
+            f"📝 /vote — голосовать\n"
+            f"ℹ️ /status — статус"
         )
+        if user_id == ADMIN_ID:
+            text += "\n📋 /admin — панель управления"
+        await update.message.reply_text(text, parse_mode="Markdown")
     else:
-        await update.message.reply_text("❌ Ошибка регистрации. Попробуйте позже.")
-
-    return ConversationHandler.END
+        await update.message.reply_text("❌ Ошибка. Попробуйте /start")
 
 
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Отмена регистрации."""
-    await update.message.reply_text("Отменено. Используйте /start для повторной попытки.")
-    return ConversationHandler.END
-
-
-async def vote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_vote(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /vote — показать доступные голосования."""
     user_id = update.effective_user.id
     member = db.get_member_by_telegram_id(user_id)
 
     if not member:
-        await update.message.reply_text(
-            "❌ Вы не зарегистрированы. Используйте /start для регистрации."
-        )
+        await update.message.reply_text("❌ Сначала зарегистрируйтесь: /start")
         return
 
     active = db.get_active_voting(member["pin"])
@@ -134,19 +128,17 @@ async def vote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not active:
         await update.message.reply_text(
             "📭 Нет активных голосований.\n"
-            "Вы получите уведомление, когда начнётся голосование."
+            "Вы получите уведомление, когда начнётся."
         )
         return
 
     for voting in active:
         for q in voting["questions"]:
-            keyboard = [
-                [
-                    InlineKeyboardButton("✅ За", callback_data=f"vote:{voting['meeting_id']}:{voting['session_id']}:{q['id']}:for"),
-                    InlineKeyboardButton("❌ Против", callback_data=f"vote:{voting['meeting_id']}:{voting['session_id']}:{q['id']}:against"),
-                    InlineKeyboardButton("⬜ Воздерж.", callback_data=f"vote:{voting['meeting_id']}:{voting['session_id']}:{q['id']}:abstain"),
-                ]
-            ]
+            keyboard = [[
+                InlineKeyboardButton("✅ За", callback_data=f"v:{voting['meeting_id']}:{voting['session_id']}:{q['id']}:for"),
+                InlineKeyboardButton("❌ Против", callback_data=f"v:{voting['meeting_id']}:{voting['session_id']}:{q['id']}:against"),
+                InlineKeyboardButton("⬜ Воздерж.", callback_data=f"v:{voting['meeting_id']}:{voting['session_id']}:{q['id']}:abstain"),
+            ]]
             await update.message.reply_text(
                 f"🗳 *{voting['session_title']}*\n"
                 f"📅 {voting['meeting_date']}, протокол №{voting['protocol_number']}\n\n"
@@ -157,20 +149,19 @@ async def vote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка нажатия кнопки голосования."""
+    """Обработка кнопки голосования."""
     query = update.callback_query
     await query.answer()
 
     user_id = query.from_user.id
     member = db.get_member_by_telegram_id(user_id)
-
     if not member:
-        await query.edit_message_text("❌ Вы не зарегистрированы.")
+        await query.edit_message_text("❌ Вы не зарегистрированы. /start")
         return
 
-    # Формат: vote:meeting_id:session_id:question_id:vote_type
+    # Формат: v:meeting_id:session_id:question_id:vote_type
     parts = query.data.split(":")
-    if len(parts) != 5 or parts[0] != "vote":
+    if len(parts) != 5 or parts[0] != "v":
         return
 
     _, meeting_id, session_id, question_id, vote_type = parts
@@ -180,100 +171,61 @@ async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
     result = db.cast_vote(meeting_id, session_id, question_id, member["pin"], vote_type)
 
-    vote_labels = {"for": "✅ За", "against": "❌ Против", "abstain": "⬜ Воздержался"}
+    labels = {"for": "✅ За", "against": "❌ Против", "abstain": "⬜ Воздержался"}
 
     if result == "ok":
         await query.edit_message_text(
-            f"{query.message.text}\n\n"
-            f"📨 Ваш голос принят: {vote_labels[vote_type]}",
+            f"{query.message.text}\n\n📨 Ваш голос: {labels[vote_type]}"
         )
 
-        # Проверить, есть ли ещё вопросы в этом сеансе
+        # Показать следующий вопрос
         active = db.get_active_voting(member["pin"])
-        current_session = None
         for v in active:
-            if v["session_id"] == session_id:
-                current_session = v
-                break
+            if v["session_id"] == session_id and v["questions"]:
+                next_q = v["questions"][0]
+                keyboard = [[
+                    InlineKeyboardButton("✅ За", callback_data=f"v:{meeting_id}:{session_id}:{next_q['id']}:for"),
+                    InlineKeyboardButton("❌ Против", callback_data=f"v:{meeting_id}:{session_id}:{next_q['id']}:against"),
+                    InlineKeyboardButton("⬜ Воздерж.", callback_data=f"v:{meeting_id}:{session_id}:{next_q['id']}:abstain"),
+                ]]
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text=f"🗳 *{v['session_title']}*\n\n❓ {next_q['text']}",
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode="Markdown"
+                )
+                return
 
-        if current_session and current_session["questions"]:
-            next_q = current_session["questions"][0]
-            keyboard = [
-                [
-                    InlineKeyboardButton("✅ За", callback_data=f"vote:{meeting_id}:{session_id}:{next_q['id']}:for"),
-                    InlineKeyboardButton("❌ Против", callback_data=f"vote:{meeting_id}:{session_id}:{next_q['id']}:against"),
-                    InlineKeyboardButton("⬜ Воздерж.", callback_data=f"vote:{meeting_id}:{session_id}:{next_q['id']}:abstain"),
-                ]
-            ]
-            q_index = len(current_session["questions"])
-            meeting = db.get_meeting(meeting_id)
-            session = None
-            for s in meeting["sessions"]:
-                if s["id"] == session_id:
-                    session = s
-                    break
-            total_q = len(session["questions"]) if session else "?"
-
-            await context.bot.send_message(
-                chat_id=user_id,
-                text=(
-                    f"🗳 *{current_session['session_title']}*\n\n"
-                    f"❓ *Следующий вопрос:*\n"
-                    f"{next_q['text']}"
-                ),
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode="Markdown"
-            )
-        else:
-            await context.bot.send_message(
-                chat_id=user_id,
-                text="✅ Вы проголосовали по всем вопросам этого сеанса. Спасибо!"
-            )
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="✅ Вы проголосовали по всем вопросам. Спасибо!"
+        )
 
     elif result == "already_voted":
-        await query.edit_message_text(
-            f"{query.message.text}\n\n⚠️ Вы уже голосовали по этому вопросу."
-        )
+        await query.edit_message_text(f"{query.message.text}\n\n⚠️ Вы уже голосовали.")
     elif result == "not_attendee":
-        await query.edit_message_text(
-            "❌ Вы не отмечены как присутствующий на этом заседании."
-        )
+        await query.edit_message_text("❌ Вы не отмечены как присутствующий.")
     elif result == "session_not_active":
-        await query.edit_message_text(
-            "⏹ Голосование по этому сеансу уже завершено."
-        )
+        await query.edit_message_text("⏹ Голосование уже завершено.")
     else:
-        await query.edit_message_text("❌ Ошибка. Попробуйте позже.")
+        await query.edit_message_text("❌ Ошибка.")
 
 
-async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /status — статус участника."""
+async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /status."""
     user_id = update.effective_user.id
     member = db.get_member_by_telegram_id(user_id)
 
     if not member:
-        await update.message.reply_text(
-            "❌ Вы не зарегистрированы. Используйте /start"
-        )
+        await update.message.reply_text("❌ Не зарегистрированы. /start")
         return
 
     active = db.get_active_voting(member["pin"])
-    active_count = sum(len(v["questions"]) for v in active)
+    count = sum(len(v["questions"]) for v in active)
 
     await update.message.reply_text(
         f"👤 *{member['name']}*\n"
         f"🔑 PIN: {member['pin']}\n"
-        f"📝 Неотвеченных вопросов: {active_count}",
+        f"📝 Неотвеченных вопросов: {count}",
         parse_mode="Markdown"
-    )
-
-
-def get_registration_handler():
-    """Создать ConversationHandler для регистрации."""
-    return ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
-        states={
-            WAITING_PIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_pin)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
     )
