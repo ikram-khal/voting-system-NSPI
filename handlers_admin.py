@@ -49,16 +49,16 @@ async def show_main_menu(chat_id, context, message_id=None):
     active = sum(1 for mt in meetings for s in mt["sessions"] if s["status"] == "voting")
 
     text = (
-        "🏛 *Илмий Кенгаш — Панель секретаря*\n\n"
-        f"👥 Участников: {len(members)}\n"
-        f"📋 Заседаний: {len(meetings)}\n"
-        f"🗳 Активных голосований: {active}"
+        "🏛 *Ilimiy seminar — sekretar paneli*\n\n"
+        f"👥 Aǵzalar: {len(members)}\n"
+        f"📋 Seminar: {len(meetings)}\n"
+        f"🗳 Dawıs beriw processi: {active}"
     )
     keyboard = [
-        [InlineKeyboardButton("👥 Участники", callback_data="menu:members"),
-         InlineKeyboardButton("📋 Заседания", callback_data="menu:meetings")],
-        [InlineKeyboardButton("📎 Загрузить xlsx", callback_data="menu:upload"),
-         InlineKeyboardButton("📥 Шаблон xlsx", callback_data="menu:sample")],
+        [InlineKeyboardButton("👥 Aǵzalar", callback_data="menu:members"),
+         InlineKeyboardButton("📋 Seminar", callback_data="menu:meetings")],
+        [InlineKeyboardButton("📎 xlsx júklew", callback_data="menu:upload"),
+         InlineKeyboardButton("📥 Úlgi xlsx", callback_data="menu:sample")],
     ]
 
     if message_id:
@@ -81,17 +81,17 @@ async def show_members(chat_id, context, message_id):
     members = db.get_members()
 
     if not members:
-        text = "👥 *Участники*\n\nСписок пуст. Загрузите .xlsx или добавьте вручную."
+        text = "👥 *Aǵzalar*\n\nDizim joq. .xlsx júkleń yáki qoldan qosıp shıǵıń."
     else:
-        lines = ["👥 *Участники*\n"]
+        lines = ["👥 *Aǵzalar*\n"]
         for i, m in enumerate(members, 1):
             status = "✅" if m["telegram_id"] else "⏳"
             lines.append(f"{i}. {m['name']} ({m['pin']}) {status}")
-        lines.append(f"\n✅ = в боте, ⏳ = не зарегистрирован")
+        lines.append(f"\n✅ = botta, ⏳ = dizimnen ótpegen")
         text = "\n".join(lines)
 
     keyboard = [
-        [InlineKeyboardButton("➕ Добавить вручную", callback_data="mem:add")],
+        [InlineKeyboardButton("➕ Qoldan qosıw", callback_data="mem:add")],
     ]
     # Кнопки удаления (по 2 в ряд)
     row = []
@@ -119,24 +119,24 @@ async def show_meetings(chat_id, context, message_id):
     meetings = db.get_meetings()
 
     if not meetings:
-        text = "📋 *Заседания*\n\nНет заседаний."
+        text = "📋 *Seminar*\n\nSeminar joq."
     else:
-        lines = ["📋 *Заседания*\n"]
+        lines = ["📋 *Seminar*\n"]
         for mt in meetings:
             status = {"draft": "📝", "active": "🟢", "closed": "🔴"}.get(mt["status"], "📝")
-            lines.append(f"{status} Протокол №{mt['protocol_number']} — {mt['date']}")
-            lines.append(f"   Сеансов: {len(mt['sessions'])}, Присутств.: {len(mt['attendees'])}")
+            lines.append(f"{status} Bayannama №{mt['protocol_number']} — {mt['date']}")
+            lines.append(f"   Seans: {len(mt['sessions'])}, Qatnasıwshı.: {len(mt['attendees'])}")
         text = "\n".join(lines)
 
     keyboard = [
-        [InlineKeyboardButton("➕ Новое заседание", callback_data="mtg:create")],
+        [InlineKeyboardButton("➕ Jańa seminar", callback_data="mtg:create")],
     ]
     for mt in meetings:
         keyboard.append([InlineKeyboardButton(
             f"📋 №{mt['protocol_number']} ({mt['date']})",
             callback_data=f"mtg:open:{mt['id']}"
         )])
-    keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="menu:main")])
+    keyboard.append([InlineKeyboardButton("◀️ Artqa", callback_data="menu:main")])
 
     await context.bot.edit_message_text(
         text=text, chat_id=chat_id, message_id=message_id,
@@ -155,19 +155,19 @@ async def show_meeting_detail(chat_id, context, message_id, meeting_id):
 
     members = db.get_members()
     text = (
-        f"📋 *Протокол №{mt['protocol_number']}*\n"
+        f"📋 *Bayannama №{mt['protocol_number']}*\n"
         f"📅 {mt['date']}\n"
-        f"👥 Присутствующих: {len(mt['attendees'])} из {len(members)}\n"
-        f"📂 Сеансов: {len(mt['sessions'])}"
+        f"👥 Qatnasıwshı: {len(mt['attendees'])} из {len(members)}\n"
+        f"📂 Seanslar: {len(mt['sessions'])}"
     )
 
     keyboard = [
-        [InlineKeyboardButton(f"👥 Присутствующие ({len(mt['attendees'])})", callback_data=f"att:{meeting_id}:0")],
-        [InlineKeyboardButton("📂 Сеансы", callback_data=f"ses:list:{meeting_id}"),
-         InlineKeyboardButton("➕ Сеанс", callback_data=f"ses:add:{meeting_id}")],
-        [InlineKeyboardButton("📄 Отчёт (DOCX)", callback_data=f"mtg:report:{meeting_id}")],
-        [InlineKeyboardButton("🗑 Удалить", callback_data=f"mtg:del:{meeting_id}"),
-         InlineKeyboardButton("◀️ Назад", callback_data="menu:meetings")],
+        [InlineKeyboardButton(f"👥 Qatnasıwshılar ({len(mt['attendees'])})", callback_data=f"att:{meeting_id}:0")],
+        [InlineKeyboardButton("📂 Seanslar", callback_data=f"ses:list:{meeting_id}"),
+         InlineKeyboardButton("➕ Seans", callback_data=f"ses:add:{meeting_id}")],
+        [InlineKeyboardButton("📄 Esabat (DOCX)", callback_data=f"mtg:report:{meeting_id}")],
+        [InlineKeyboardButton("🗑 Óshiriw", callback_data=f"mtg:del:{meeting_id}"),
+         InlineKeyboardButton("◀️ Artqa", callback_data="menu:meetings")],
     ]
 
     await context.bot.edit_message_text(
@@ -192,10 +192,10 @@ async def show_attendees(chat_id, context, message_id, meeting_id, page=0):
     page_members = members[start:start + per_page]
 
     text = (
-        f"👥 *Присутствующие — Протокол №{mt['protocol_number']}*\n"
-        f"Отмечено: {len(mt['attendees'])} из {len(members)}\n"
-        f"Стр. {page+1}/{total_pages}\n\n"
-        f"Нажмите на имя чтобы отметить/убрать:"
+        f"👥 *Qatnasıwshılar — Bayannama №{mt['protocol_number']}*\n"
+        f"Belgilendi: {len(mt['attendees'])} из {len(members)}\n"
+        f"Bet {page+1}/{total_pages}\n\n"
+        f"Belgilew/óshiriw ushın atqa basıń:"
     )
 
     keyboard = []
@@ -232,15 +232,15 @@ async def show_sessions(chat_id, context, message_id, meeting_id):
         return
 
     if not mt["sessions"]:
-        text = f"📂 *Сеансы — Протокол №{mt['protocol_number']}*\n\nНет сеансов."
+        text = f"📂 *Seanslar — Bayannama №{mt['protocol_number']}*\n\nSeanslar joq."
     else:
-        lines = [f"📂 *Сеансы — Протокол №{mt['protocol_number']}*\n"]
+        lines = [f"📂 *Seanslar — Bayannama №{mt['protocol_number']}*\n"]
         for s in mt["sessions"]:
             icon = {"draft": "📝", "voting": "🟢", "closed": "🔴"}.get(s["status"], "📝")
             lines.append(f"{icon} {s['title']} ({len(s['questions'])} вопр.)")
         text = "\n".join(lines)
 
-    keyboard = [[InlineKeyboardButton("➕ Новый сеанс", callback_data=f"ses:add:{meeting_id}")]]
+    keyboard = [[InlineKeyboardButton("➕ Jaǵa seans", callback_data=f"ses:add:{meeting_id}")]]
     for s in mt["sessions"]:
         icon = {"draft": "📝", "voting": "🟢", "closed": "🔴"}.get(s["status"], "📝")
         keyboard.append([InlineKeyboardButton(
