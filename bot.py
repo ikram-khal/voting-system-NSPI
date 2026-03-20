@@ -53,10 +53,12 @@ async def run_production():
         await application.bot.set_my_commands([
             BotCommand("admin", "🔧 Басқарыў"),
             BotCommand("vote", "🗳 Даўыс бериў"),
+            BotCommand("start", "📋 Дизимнен өтиў"),
         ], scope=BotCommandScopeChat(chat_id=ADMIN_ID))
 
         await application.bot.set_my_commands([
             BotCommand("vote", "🗳 Даўыс бериў"),
+            BotCommand("start", "📋 Дизимнен өтиў"),
         ])
         logger.info("✅ Меню установлено")
     except Exception as e:
