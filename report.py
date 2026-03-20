@@ -43,12 +43,12 @@ def generate_report(meeting_id):
             v = q["votes"]
             total = v["for"] + v["against"] + v["abstain"]
             p = doc.add_paragraph()
-            p.add_run(f"Масала {i}: ").bold = True
+            p.add_run(f"Мәселе {i}: ").bold = True
             p.add_run(q["text"])
             table = doc.add_table(rows=2, cols=4)
             table.style = "Table Grid"
             table.alignment = WD_TABLE_ALIGNMENT.CENTER
-            for j, h in enumerate(["", "Жақлап", "Қарсы", "Тийкарсыз"]):
+            for j, h in enumerate(["", "Қосыламан", "Қарсыман", "Бийтәреп"]):
                 c = table.rows[0].cells[j]
                 c.text = h
                 for par in c.paragraphs:

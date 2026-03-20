@@ -95,7 +95,7 @@ async def show_meetings(chat_id, ctx, msg_id):
             closed = sum(1 for q in mt["questions"] if q["status"] == "closed")
             icon = "🟢" if active > 0 else "📝"
             lines.append(f"{icon} №{mt['protocol_number']} — {mt['date']}")
-            lines.append(f"   Масалалар: {len(mt['questions'])} (тамамланды: {closed})")
+            lines.append(f"   Даўысқа қойылған мәселе: {len(mt['questions'])} (тамамланды: {closed})")
         text = "\n".join(lines)
 
     kb = [
@@ -126,15 +126,14 @@ async def show_meeting(chat_id, ctx, msg_id, mid):
         f"📋 *Мәжилис №{mt['protocol_number']}*\n"
         f"📅 {mt['date']}\n"
         f"👥 Қатнасыўшылар: {len(mt['attendees'])}/{len(members)}\n"
-        f"📝 Масалалар: {len(mt['questions'])}"
+        f"📝 Даўысқа қойылған мәселе: {len(mt['questions'])}"
     )
     if active_q:
         text += f"\n🟢 Актив: {active_q}"
 
     kb = [
         [InlineKeyboardButton(f"👥 Қатнасыўшылар ({len(mt['attendees'])})", callback_data=f"att:{mid}:0")],
-        [InlineKeyboardButton("📝 Масалалар", callback_data=f"qst:{mid}"),
-         InlineKeyboardButton("➕ Масала", callback_data=f"q:add:{mid}")],
+        [InlineKeyboardButton("📝 Даўысқа қойылған мәселе", callback_data=f"qst:{mid}")],
         [InlineKeyboardButton("📄 Есабат DOCX", callback_data=f"mtg:rep:{mid}")],
         [InlineKeyboardButton("🗑 Өшириў", callback_data=f"mtg:del:{mid}"),
          InlineKeyboardButton("◀️ Артқа", callback_data="m:meetings")],
@@ -187,9 +186,9 @@ async def show_questions(chat_id, ctx, msg_id, mid):
         return
 
     if not mt["questions"]:
-        text = f"📝 *Масалалар — Мәжилис №{mt['protocol_number']}*\n\nМасала жоқ."
+        text = f"📝 *Даўысқа қойылған мәселе — Мәжилис №{mt['protocol_number']}*\n\nМәселе жоқ."
     else:
-        lines = [f"📝 *Масалалар — Мәжилис №{mt['protocol_number']}*\n"]
+        lines = [f"📝 *Даўысқа қойылған мәселе — Мәжилис №{mt['protocol_number']}*\n"]
         for i, q in enumerate(mt["questions"], 1):
             v = q["votes"]
             icon = {"draft": "📝", "voting": "🟢", "closed": "🔴"}[q["status"]]
@@ -207,7 +206,7 @@ async def show_questions(chat_id, ctx, msg_id, mid):
             lines.append("")
         text = "\n".join(lines)
 
-    kb = [[InlineKeyboardButton("➕ Масала қосыў", callback_data=f"q:add:{mid}")]]
+    kb = [[InlineKeyboardButton("➕ Мәселе қосыў", callback_data=f"q:add:{mid}")]]
     for q in mt["questions"]:
         icon = {"draft": "📝", "voting": "🟢", "closed": "🔴"}[q["status"]]
         kb.append([InlineKeyboardButton(
@@ -251,9 +250,9 @@ async def show_question(chat_id, ctx, msg_id, mid, qid):
     if q["status"] in ("voting", "closed"):
         lines.append(f"\n📊 *Нәтийжелер:*")
         lines.append(f"   {_result_bar(v)}")
-        lines.append(f"   ✅ Жақлап: *{v['for']}*")
-        lines.append(f"   ❌ Қарсы: *{v['against']}*")
-        lines.append(f"   ⬜ Тийкарсыз: *{v['abstain']}*")
+        lines.append(f"   ✅ Қосыламан: *{v['for']}*")
+        lines.append(f"   ❌ Қарсыман: *{v['against']}*")
+        lines.append(f"   ⬜ Бийтәреп: *{v['abstain']}*")
         lines.append(f"   📊 Жәми: {total}/{len(mt['attendees'])}")
         if q["status"] == "closed":
             if v["for"] > v["against"]:
@@ -278,7 +277,7 @@ async def show_question(chat_id, ctx, msg_id, mid, qid):
     elif q["status"] == "closed":
         kb.append([InlineKeyboardButton("📄 Есабат", callback_data=f"mtg:rep:{mid}")])
 
-    kb.append([InlineKeyboardButton("◀️ Масалаларға", callback_data=f"qst:{mid}")])
+    kb.append([InlineKeyboardButton("◀️ Даўысқа қойылған мәселеға", callback_data=f"qst:{mid}")])
 
     await ctx.bot.edit_message_text(chat_id=chat_id, message_id=msg_id,
         text=text, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
@@ -348,7 +347,7 @@ async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
         mid = d.split(":")[2]
         admin_input[ADMIN_ID] = {"action": "add_question", "mid": mid}
         await context.bot.edit_message_text(chat_id=cid, message_id=mid_msg,
-            text="📝 Масала текстин жиберең\n\nМысал:\n`Оппонентлерди тастыйықлаў`\n\n/cancel — бийкар", parse_mode="Markdown")
+            text="📝 Мәселе текстин жиберең\n\nМысал:\n`Оппонентлерди тастыйықлаў`\n\n/cancel — бийкар", parse_mode="Markdown")
     elif d.startswith("q:open:"):
         p = d.split(":")
         await show_question(cid, context, mid_msg, p[2], p[3])
@@ -383,9 +382,9 @@ async def start_voting(chat_id, ctx, msg_id, mid, qid):
         if m["pin"] in mt["attendees"] and m["telegram_id"]:
             try:
                 kb = [[
-                    InlineKeyboardButton("✅ Жақлап", callback_data=f"v:{mid}:{qid}:for"),
-                    InlineKeyboardButton("❌ Қарсы", callback_data=f"v:{mid}:{qid}:against"),
-                    InlineKeyboardButton("⬜ Тийкарсыз", callback_data=f"v:{mid}:{qid}:abstain"),
+                    InlineKeyboardButton("✅ Қосыламан", callback_data=f"v:{mid}:{qid}:for"),
+                    InlineKeyboardButton("❌ Қарсыман", callback_data=f"v:{mid}:{qid}:against"),
+                    InlineKeyboardButton("⬜ Бийтәреп", callback_data=f"v:{mid}:{qid}:abstain"),
                 ]]
                 await ctx.bot.send_message(
                     chat_id=m["telegram_id"],
@@ -461,7 +460,7 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif action == "add_question":
         mid = state["mid"]
         db.add_question(mid, text)
-        await update.message.reply_text(f"✅ Масала қосылды\n/admin")
+        await update.message.reply_text(f"✅ Мәселе қосылды\n/admin")
 
     elif action == "upload":
         await update.message.reply_text("📎 .xlsx *файл* жиберең\n/admin", parse_mode="Markdown")

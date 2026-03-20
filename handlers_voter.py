@@ -89,9 +89,9 @@ async def cmd_vote(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for item in active:
         q = item["question"]
         kb = [[
-            InlineKeyboardButton("✅ Жақлап", callback_data=f"v:{item['meeting_id']}:{q['id']}:for"),
-            InlineKeyboardButton("❌ Қарсы", callback_data=f"v:{item['meeting_id']}:{q['id']}:against"),
-            InlineKeyboardButton("⬜ Тийкарсыз", callback_data=f"v:{item['meeting_id']}:{q['id']}:abstain"),
+            InlineKeyboardButton("✅ Қосыламан", callback_data=f"v:{item['meeting_id']}:{q['id']}:for"),
+            InlineKeyboardButton("❌ Қарсыман", callback_data=f"v:{item['meeting_id']}:{q['id']}:against"),
+            InlineKeyboardButton("⬜ Бийтәреп", callback_data=f"v:{item['meeting_id']}:{q['id']}:abstain"),
         ]]
         await update.message.reply_text(
             f"🗳 *Мәжилис №{item['protocol_number']}*\n📅 {item['meeting_date']}\n\n📝 *{q['text']}*",
@@ -113,7 +113,7 @@ async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     _, mid, qid, vote = parts
 
     result = db.cast_vote(mid, qid, member["pin"], vote)
-    labels = {"for": "✅ Жақлап", "against": "❌ Қарсы", "abstain": "⬜ Тийкарсыз"}
+    labels = {"for": "✅ Қосыламан", "against": "❌ Қарсыман", "abstain": "⬜ Бийтәреп"}
 
     if result == "ok":
         await query.edit_message_text(f"{query.message.text}\n\n📨 Даўысыңыз: {labels[vote]}")
@@ -123,15 +123,15 @@ async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             nxt = active[0]
             nq = nxt["question"]
             kb = [[
-                InlineKeyboardButton("✅ Жақлап", callback_data=f"v:{nxt['meeting_id']}:{nq['id']}:for"),
-                InlineKeyboardButton("❌ Қарсы", callback_data=f"v:{nxt['meeting_id']}:{nq['id']}:against"),
-                InlineKeyboardButton("⬜ Тийкарсыз", callback_data=f"v:{nxt['meeting_id']}:{nq['id']}:abstain"),
+                InlineKeyboardButton("✅ Қосыламан", callback_data=f"v:{nxt['meeting_id']}:{nq['id']}:for"),
+                InlineKeyboardButton("❌ Қарсыман", callback_data=f"v:{nxt['meeting_id']}:{nq['id']}:against"),
+                InlineKeyboardButton("⬜ Бийтәреп", callback_data=f"v:{nxt['meeting_id']}:{nq['id']}:abstain"),
             ]]
             await context.bot.send_message(chat_id=uid,
-                text=f"🗳 Кейинги масала:\n\n📝 *{nq['text']}*",
+                text=f"🗳 Кейинги мәселе:\n\n📝 *{nq['text']}*",
                 reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
         else:
-            await context.bot.send_message(chat_id=uid, text="✅ Барлық масалаларға даўыс бердиңиз. Рахмет!")
+            await context.bot.send_message(chat_id=uid, text="✅ Барлық мәселелерге даўыс бердиңиз. Рахмет!")
 
     elif result == "already_voted":
         await query.edit_message_text(f"{query.message.text}\n\n⚠️ Сиз даўыс бергенсиз.")
