@@ -51,16 +51,16 @@ async def run_production():
     from telegram import BotCommand, BotCommandScopeChat
     try:
         await application.bot.set_my_commands([
-            BotCommand("admin", "🔧 Управление"),
-            BotCommand("vote", "🗳 Голосование"),
+            BotCommand("admin", "🔧 Basqarıw"),
+            BotCommand("vote", "🗳 Dawıs beriw"),
         ], scope=BotCommandScopeChat(chat_id=ADMIN_ID))
 
         await application.bot.set_my_commands([
-            BotCommand("vote", "🗳 Голосование"),
+            BotCommand("vote", "🗳 Dawıs beriw"),
         ])
-        logger.info("✅ Меню установлено")
+        logger.info("✅ Menu ornatıldı")
     except Exception as e:
-        logger.warning(f"⚠️ Меню: {e}")
+        logger.warning(f"⚠️ Menu: {e}")
 
     aio_app = web.Application()
 
