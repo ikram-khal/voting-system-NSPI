@@ -23,7 +23,7 @@ def is_admin(uid):
 
 async def cmd_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Нет прав.")
+        await update.message.reply_text("⛔ Huqıq joq.")
         return
     await show_main_menu(update.effective_chat.id, context)
 
@@ -34,16 +34,16 @@ async def show_main_menu(chat_id, context, msg_id=None):
     active_q = sum(1 for mt in meetings for q in mt["questions"] if q["status"] == "voting")
 
     text = (
-        "🏛 *Панель секретаря*\n\n"
-        f"👥 Участников: {len(members)}\n"
-        f"📋 Заседаний: {len(meetings)}\n"
-        f"🗳 Активных голосований: {active_q}"
+        "🏛 *Xatker paneli*\n\n"
+        f"👥 Aǵzalar: {len(members)}\n"
+        f"📋 Májilisler: {len(meetings)}\n"
+        f"🗳 Dawısqa qoyılǵan: {active_q}"
     )
     kb = [
-        [InlineKeyboardButton("👥 Участники", callback_data="m:members"),
-         InlineKeyboardButton("📋 Заседания", callback_data="m:meetings")],
-        [InlineKeyboardButton("📎 Загрузить xlsx", callback_data="m:upload"),
-         InlineKeyboardButton("📥 Шаблон xlsx", callback_data="m:sample")],
+        [InlineKeyboardButton("👥 Aǵzalar", callback_data="m:members"),
+         InlineKeyboardButton("📋 Májilisler", callback_data="m:meetings")],
+        [InlineKeyboardButton("📎 xlsx júklew", callback_data="m:upload"),
+         InlineKeyboardButton("📥 xlsx úlgisi", callback_data="m:sample")],
     ]
     if msg_id:
         await context.bot.edit_message_text(chat_id=chat_id, message_id=msg_id,
@@ -58,16 +58,16 @@ async def show_main_menu(chat_id, context, msg_id=None):
 async def show_members(chat_id, ctx, msg_id):
     members = db.get_members()
     if not members:
-        text = "👥 *Участники*\n\nПусто. Загрузите xlsx или добавьте вручную."
+        text = "👥 *Aǵzalar*\n\nqosılmaǵan. xlsx júkleń yáki qoldan qosıp shıǵıń."
     else:
-        lines = ["👥 *Участники*\n"]
+        lines = ["👥 *Aǵzalar*\n"]
         for i, m in enumerate(members, 1):
             s = "✅" if m["telegram_id"] else "⏳"
             lines.append(f"{i}. {s} {m['name']} `({m['pin']})`")
         lines.append(f"\n✅ в боте · ⏳ ожидание")
         text = "\n".join(lines)
 
-    kb = [[InlineKeyboardButton("➕ Добавить", callback_data="mem:add")]]
+    kb = [[InlineKeyboardButton("➕ Qosıw", callback_data="mem:add")]]
     row = []
     for m in members:
         row.append(InlineKeyboardButton(f"❌ {m['name'][:12]}", callback_data=f"mem:del:{m['pin']}"))
@@ -76,7 +76,7 @@ async def show_members(chat_id, ctx, msg_id):
             row = []
     if row:
         kb.append(row)
-    kb.append([InlineKeyboardButton("◀️ Назад", callback_data="m:main")])
+    kb.append([InlineKeyboardButton("◀️ Artqa", callback_data="m:main")])
 
     await ctx.bot.edit_message_text(chat_id=chat_id, message_id=msg_id,
         text=text, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
@@ -87,19 +87,19 @@ async def show_members(chat_id, ctx, msg_id):
 async def show_meetings(chat_id, ctx, msg_id):
     meetings = db.get_meetings()
     if not meetings:
-        text = "📋 *Заседания*\n\nНет заседаний."
+        text = "📋 *Májilisler*\n\nMájilisler joq."
     else:
-        lines = ["📋 *Заседания*\n"]
+        lines = ["📋 *Májilisler*\n"]
         for mt in meetings:
             active = sum(1 for q in mt["questions"] if q["status"] == "voting")
             closed = sum(1 for q in mt["questions"] if q["status"] == "closed")
             icon = "🟢" if active > 0 else "📝"
             lines.append(f"{icon} №{mt['protocol_number']} — {mt['date']}")
-            lines.append(f"   Вопросов: {len(mt['questions'])} (завершено: {closed})")
+            lines.append(f"   Máseler: {len(mt['questions'])} (Juwmaqlandı: {closed})")
         text = "\n".join(lines)
 
     kb = [
-        [InlineKeyboardButton("➕ Новое заседание", callback_data="mtg:new")],
+        [InlineKeyboardButton("➕ Jańa májilis", callback_data="mtg:new")],
     ]
     for mt in meetings:
         kb.append([InlineKeyboardButton(
@@ -123,21 +123,21 @@ async def show_meeting(chat_id, ctx, msg_id, mid):
     active_q = sum(1 for q in mt["questions"] if q["status"] == "voting")
 
     text = (
-        f"📋 *Заседание №{mt['protocol_number']}*\n"
+        f"📋 *Májilis №{mt['protocol_number']}*\n"
         f"📅 {mt['date']}\n"
-        f"👥 Присутствующих: {len(mt['attendees'])} из {len(members)}\n"
-        f"❓ Вопросов: {len(mt['questions'])}"
+        f"👥 Qatnasqanlar: {len(mt['attendees'])} из {len(members)}\n"
+        f"❓ Máseleler: {len(mt['questions'])}"
     )
     if active_q:
-        text += f"\n🟢 Активных: {active_q}"
+        text += f"\n🟢 Dawısqa qoyıldı: {active_q}"
 
     kb = [
-        [InlineKeyboardButton(f"👥 Присутствующие ({len(mt['attendees'])})", callback_data=f"att:{mid}:0")],
-        [InlineKeyboardButton("❓ Вопросы", callback_data=f"qst:{mid}"),
-         InlineKeyboardButton("➕ Вопрос", callback_data=f"q:add:{mid}")],
-        [InlineKeyboardButton("📄 Отчёт DOCX", callback_data=f"mtg:rep:{mid}")],
-        [InlineKeyboardButton("🗑 Удалить", callback_data=f"mtg:del:{mid}"),
-         InlineKeyboardButton("◀️ Назад", callback_data="m:meetings")],
+        [InlineKeyboardButton(f"👥 Qatnasıwshılar ({len(mt['attendees'])})", callback_data=f"att:{mid}:0")],
+        [InlineKeyboardButton("❓ Máseleler", callback_data=f"qst:{mid}"),
+         InlineKeyboardButton("➕ Másele", callback_data=f"q:add:{mid}")],
+        [InlineKeyboardButton("📄 Esabat DOCX", callback_data=f"mtg:rep:{mid}")],
+        [InlineKeyboardButton("🗑 Óshiriw", callback_data=f"mtg:del:{mid}"),
+         InlineKeyboardButton("◀️ Artqa", callback_data="m:meetings")],
     ]
 
     await ctx.bot.edit_message_text(chat_id=chat_id, message_id=msg_id,
@@ -157,7 +157,7 @@ async def show_attendees(chat_id, ctx, msg_id, mid, page=0):
     chunk = members[page * per:(page + 1) * per]
 
     text = (
-        f"👥 *Присутствующие* ({len(mt['attendees'])}/{len(members)})\n"
+        f"👥 *Qatnasıwshılar* ({len(mt['attendees'])}/{len(members)})\n"
         f"Стр. {page+1}/{pages} · Нажмите для ✅/⬜"
     )
 
