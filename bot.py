@@ -65,20 +65,20 @@ async def run_production():
         # Для админа — обе команды
         await application.bot.set_my_commands(
             commands=[
-                BotCommand("admin", "🔧 Управление"),
-                BotCommand("vote", "🗳 Голосование"),
+                BotCommand("admin", "🔧 Basqarıw"),
+                BotCommand("vote", "🗳 Dawıs beriw"),
             ],
             scope=BotCommandScopeChat(chat_id=ADMIN_ID)
         )
         # Для остальных — только голосование
         await application.bot.set_my_commands(
             commands=[
-                BotCommand("vote", "🗳 Голосование"),
+                BotCommand("vote", "🗳 Dawıs beriw"),
             ]
         )
-        logger.info("✅ Команды меню установлены")
+        logger.info("✅ Menyu buyrıqları ornatıldı")
     except Exception as e:
-        logger.warning(f"⚠️ Команды: {e}")
+        logger.warning(f"⚠️ Buyrıqlar: {e}")
 
     aio_app = web.Application()
 
